@@ -1,4 +1,4 @@
-# this module implements the web crawler and manages the spiders
+# this module implements the web crawler for a list of urls and manages the spiders
 from multiprocessing import Process
 import os
 import string

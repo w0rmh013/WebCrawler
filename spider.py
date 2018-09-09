@@ -1,4 +1,4 @@
-# this module implements a website crawler
+# this module implements the website scanner
 import os
 from multiprocessing import Queue
 import re
