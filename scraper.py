@@ -1,7 +1,7 @@
 # this module is used to scrape links from a web page
 from bs4 import BeautifulSoup
 from hashlib import sha256
-from urllib.parse import urlsplit
+from urllib.parse import quote, urlsplit
 
 
 class Scraper:
@@ -18,6 +18,21 @@ class Scraper:
         link_hash.update(start_link.encode())
         self._link_history = [link_hash.digest()]  # list of visited links (as sha256 digests)
 
+    @staticmethod
+    def create_http_link(parts):
+        """
+        Create HTTP link from parts (returned by urlsplit).
+
+        :param parts: parts returned by urlsplit
+        :return: full HTTP link
+        """
+        encoded_path = quote(parts.path)  # url-encode the path
+
+        if not encoded_path.startswith("/"):
+            encoded_path = "/" + encoded_path
+
+        return "http://{0.netloc}{1}?{0.query}#{0.fragment}".format(parts, encoded_path).replace("\\", "/")
+
     def _get_internal_link(self, raw_link):
         """
         Get internal link (None if external).
@@ -30,14 +45,11 @@ class Scraper:
             return
 
         parts = urlsplit(raw_link)
-        # a link of the form "/test/index.html"
-        if parts.scheme == "" and parts.netloc == "":
-            return "http://{1}/{0.path}{0.query}{0.fragment}".format(parts, self._domain).replace("\\", "/")
 
         if parts.scheme != "http" or parts.netloc != self._domain:
             return
 
-        return raw_link.replace("\\", "/")
+        return Scraper.create_http_link(parts)
 
     def _link_visited(self, link):
         """

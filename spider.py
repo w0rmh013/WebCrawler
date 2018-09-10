@@ -23,7 +23,7 @@ class Spider:
         """
         self._sema = sema  # a semaphore
 
-        self._url = url
+        self._url = Scraper.create_http_link(urlsplit(url))  # starting url should also be encoded
         self._domain = domain
 
         # set limit properties
@@ -90,6 +90,9 @@ class Spider:
         :param link: link to web page
         :return: list of new links to scan
         """
+        # increase page scanned count
+        self.count += 1
+
         # send HTTP HEAD request to check that content-type is text
         # this should save bandwidth and time since we won't waste get requests on images, etc.
         try:
@@ -107,10 +110,7 @@ class Spider:
 
         # log the scanning
         with open(self._log_file_path, "a") as log_file:
-            log_file.write("\t[*] Scanning {}\n".format(link))
-
-        # increase page scanned count
-        self.count += 1
+            log_file.write("\t[*] Scanning: {}\n".format(link))
 
         try:
             r = requests.get(link)
@@ -158,11 +158,12 @@ class Spider:
 
         self._crawl()
 
-        self._finished = True
         # write final log
         with open(self._log_file_path, "a") as log_file:
-            log_file.write("[+][{}] Crawling ended.\n".format(time.strftime("%H:%M:%S %d/%m/%Y")))
             log_file.write("[*] Pages Scanned: {}\n".format(self.count))
+            log_file.write("[+][{}] Crawling ended.\n".format(time.strftime("%H:%M:%S %d/%m/%Y")))
+
+        self._finished = True
 
         # the acquiring is done in the WebCrawler class before spawning the new process
         self._sema.release()
