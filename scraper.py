@@ -19,11 +19,12 @@ class Scraper:
         self._link_history = [link_hash.digest()]  # list of visited links (as sha256 digests)
 
     @staticmethod
-    def create_http_link(parts):
+    def create_http_link(parts, domain=None):
         """
         Create HTTP link from parts (returned by urlsplit).
 
         :param parts: parts returned by urlsplit
+        :param domain: optional domain if it is not included in parts
         :return: full HTTP link
         """
         encoded_path = quote(parts.path)  # url-encode the path
@@ -31,7 +32,18 @@ class Scraper:
         if not encoded_path.startswith("/"):
             encoded_path = "/" + encoded_path
 
-        return "http://{0.netloc}{1}?{0.query}#{0.fragment}".format(parts, encoded_path).replace("\\", "/")
+        # check which domain to use
+        if domain:
+            link = "http://{0}{1}".format(domain, encoded_path)
+        else:
+            link = "http://{0.netloc}{1}".format(parts, encoded_path)
+
+        if parts.query != "":
+            link += "?{0.query}".format(parts)
+        if parts.fragment != "":
+            link += "#{0.fragment}".format(parts)
+
+        return link.replace("\\", "/")
 
     def _get_internal_link(self, raw_link):
         """
@@ -46,9 +58,14 @@ class Scraper:
 
         parts = urlsplit(raw_link)
 
+        # e.g. "/user/login/"
+        if parts.scheme == "" and parts.netloc == "":
+            return Scraper.create_http_link(parts, self._domain)
+
         if parts.scheme != "http" or parts.netloc != self._domain:
             return
 
+        # e.g. http://thedomain.com/user/login/
         return Scraper.create_http_link(parts)
 
     def _link_visited(self, link):
