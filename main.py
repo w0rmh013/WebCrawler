@@ -7,6 +7,7 @@ from web_crawler import WebCrawler
 def main():
     parser = ArgumentParser()
     parser.add_argument("url_list", help="file containing urls separated by newlines")
+    parser.add_argument("-v", "--verbose", action="store_true", help="set verbosity of program")
     parser.add_argument("-m", "--max-processes", type=int, help="maximum number of processes to run in parallel (default is 10)")
     parser.add_argument("-o", "--log-output-dir", help="directory to store results and logs in (default is current working directory)")
     args = parser.parse_args()
@@ -17,7 +18,7 @@ def main():
         sys.exit(1)
 
     # check if log_output_dir is set, exists and that user has permission to write to it
-    if args.log_output_dir and not os.path.isdir(args.log_output_dir) or not os.access(args.log_output_dir, os.W_OK):
+    if args.log_output_dir and (not os.path.isdir(args.log_output_dir) or not os.access(args.log_output_dir, os.W_OK)):
         print("[-] Directory does not exist: {}".format(args.log_output_dir))
         sys.exit(1)
 
@@ -27,16 +28,15 @@ def main():
         for url in url_list_file:
             urls.append(url.strip())
 
-    if not args.max_processes:
-        if not args.log_output_dir:
-            crawler = WebCrawler(urls)
-        else:
-            crawler = WebCrawler(urls, log_dir=args.log_output_dir)
-    else:
-        if not args.log_output_dir:
-            crawler = WebCrawler(urls, max_processes=args.max_processes)
-        else:
-            crawler = WebCrawler(urls, log_dir=args.log_output_dir, max_processes=args.max_processes)
+    crawler = WebCrawler(urls)
+
+    # set custom parameters
+    if args.log_output_dir:
+        crawler.log_dir = args.log_output_dir
+    if args.max_processes:
+        crawler.max_processes = args.max_processes
+    if args.verbose:
+        crawler.verbose = True
 
     crawler.start()
     sys.exit(0)

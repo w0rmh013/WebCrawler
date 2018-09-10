@@ -9,7 +9,7 @@ from spider import Spider
 
 
 class WebCrawler:
-    def __init__(self, urls, log_dir=os.getcwd(), max_processes=10):
+    def __init__(self, urls, log_dir=os.getcwd(), max_processes=10, verbose=False):
         """
         Create instance of WebCrawler.
 
@@ -32,29 +32,37 @@ class WebCrawler:
             return clean
 
         self._urls = clean_duplicates(urls)  # url list without duplicates
-        self._log_dir = log_dir
+        self.log_dir = log_dir
 
-        self._max_processes = max_processes
-        self._sema = Semaphore(self._max_processes)  # semaphore used to limit number of processes running in parallel
+        self.max_processes = max_processes
+        self._sema = None  # semaphore used to limit number of processes running in parallel
+
+        self.verbose = verbose
 
     def start(self):
         """
         Start crawling in domains.
         """
         # create a unique log directory name
-        def create_log_dir_name(uu, dd):
+        def create_log_dir_name(dd):
             clean_domain = ""
-            for char in d:
+            for char in dd:
                 if char not in string.ascii_letters+string.digits:
                     clean_domain += "_"
                 else:
                     clean_domain += char
             return clean_domain + time.strftime("__%Y%m%d_%H%M%S")
 
+        self._sema = Semaphore(self.max_processes)
+
         # the spiders can crawl independently and have no common resources
         for u in self._urls:
-            self._sema.acquire(True)  # acquire semaphore for next spider
             d = urlsplit(u).netloc.lower()
-            s = Spider(u, d, os.path.join(self._log_dir, create_log_dir_name(u, d)), self._sema)
+            s = Spider(u, d, os.path.join(self.log_dir, create_log_dir_name(d)), self._sema)
+
             p = Process(target=Spider.crawl, args=(s, ))
+            self._sema.acquire(True)  # acquire semaphore for next spider
             p.start()
+
+            if self.verbose:
+                print("[+] Spawned spider for: {}".format(u))
