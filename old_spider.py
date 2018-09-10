@@ -1,15 +1,17 @@
 # this module implements the website scanner
-from multiprocessing import Lock, Queue
+import os
+from multiprocessing import Queue
 import re
 import requests
 from threading import Thread
+import time
 from urllib.parse import urlsplit
 
 from scraper import Scraper
 
 
 class Spider:
-    def __init__(self, url, domain, limit, limit_param, result_file_name, max_threads, sema):
+    def __init__(self, url, domain, limit, limit_param, log_dir, max_threads, sema):
         """
         Create instance of Spider.
 
@@ -17,15 +19,11 @@ class Spider:
         :param domain: domain of website
         :param limit: crawling limit type ("depth" or "count")
         :param limit_param: limit parameter (max depth or max number of pages)
-        :param result_file_name: file to store results in
+        :param log_dir: directory path to store log and result
         :param max_threads: maximum number of threads per process
         :param sema: semaphore (used for release action)
         """
-        self._emails_file_path = result_file_name
-
         self._max_threads = max_threads
-        self._thread_list = list()
-
         self._sema = sema  # a semaphore
 
         self._url = Scraper.create_http_link(urlsplit(url))  # starting url should also be encoded
@@ -37,7 +35,6 @@ class Spider:
 
         # pages scanned count
         self.count = 0
-        self._count_lock = Lock()  # lock count variable
 
         # create links-to-visit queue
         self._to_visit = Queue()
@@ -45,21 +42,24 @@ class Spider:
 
         self._scraper = Scraper(self._domain, url)  # spider's links scraper
         self._emails = list()  # list of emails already found (no need to use hash list since emails are usually short)
-        self._email_lock = Lock()  # lock to emails file
 
-        # we want to let the main thread know that another thread is updating the queue
-        self._queue_updating_lock = Lock()
+        # current page content
+        self._current_content = ""  # we save current content to reduce memory usage when passing the content to functions
 
-    def _get_emails(self, content):
+        # create log dir
+        self._log_dir = log_dir
+        os.mkdir(self._log_dir)
+        self._log_file_path = os.path.join(self._log_dir, "scan_log.txt")
+        self._emails_file_path = os.path.join(self._log_dir, "emails.txt")
+
+        self.finished = False  # check if crawler finished
+
+    def _get_emails(self):
         """
         Find all email addresses in the current data with regex pattern.
-
-        :param content: web page content
         """
         # emails that match the regex pattern
-        emails = set(re.findall(r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+", content))
-
-        self._email_lock.acquire(True)
+        emails = set(re.findall(r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+", self._current_content))
 
         with open(self._emails_file_path, "a") as emails_file:
             for email in emails:
@@ -67,8 +67,6 @@ class Spider:
                 if email not in self._emails:
                     self._emails.append(email)
                     emails_file.write(email+"\n")
-
-        self._email_lock.release()
 
     def _exceeded_depth(self, u):
         """
@@ -94,77 +92,82 @@ class Spider:
 
         :param link: link to web page
         """
+
         # send HTTP HEAD request to check that content-type is text
         # this should save bandwidth and time since we won't waste get requests on images, etc.
         try:
             check_head = requests.head(link)
-
-            m = re.match(r"^text/", check_head.headers.get("Content-Type", ""))
-            if m:
-                # increase page scanned count
-                self._count_lock.acquire(True)
-                self.count += 1
-                self._count_lock.release()
-
-                # request page
-                r = requests.get(link)
-                self._get_emails(r.text)
-
-                # add new links to queue
-                for new_link in self._scraper.get_hyperlinks(r.text):
-                    self._to_visit.put(new_link)
-
         except requests.ConnectionError:
-            # connection failure
-            pass
+            # log connection failure
+            with open(self._log_file_path, "a") as log_file:
+                log_file.write("\t[-] Failure to request: {} | Connection Error.\n".format(link))
+            self.finished = True
+            return
 
-    def _scan_thread_manager(self, links):
-        """
-        Create and manage threads for _scan method.
+        m = re.match(r"^text/", check_head.headers.get("Content-Type", ""))
+        if not m:
+            return
 
-        :param links: links to web pages
-        """
-        for link in links:
-            t = Thread(target=Spider._scan, args=(self, link))
-            self._thread_list.append(t)
-            t.start()
+        # increase page scanned count
+        self.count += 1
+
+        # log the scanning
+        with open(self._log_file_path, "a") as log_file:
+            log_file.write("\t[*] Scanning: {}\n".format(link))
+
+        try:
+            r = requests.get(link)
+        except requests.ConnectionError:
+            # log connection failure
+            with open(self._log_file_path, "a") as log_file:
+                log_file.write("\t[-] Failure to request: {} | Connection Error.\n".format(link))
+            self.finished = True
+            return
+
+        self._current_content = r.text
+        self._get_emails()
+
+        # add new links to queue
+        for new_link in self._scraper.get_hyperlinks(self._current_content):
+            self._to_visit.put(new_link)
 
     def _crawl(self):
         """
         Start crawling in the domain.
         """
         # start scanning website
-        while not self._to_visit.empty():
-            self._thread_list = list()
-            links = list()
+        while not self.finished and not self._to_visit.empty():
+            link = self._to_visit.get()
 
-            # populate links list for multi-threading
-            while not self._to_visit.empty() and len(links) < self._max_threads:
-                link = self._to_visit.get()
+            # check if link crossed crawling limit
+            if self.limit == "depth":
+                if self._exceeded_depth(link):
+                    self.finished = True
+                    continue
+            if self.limit == "count":
+                if self._reached_count():
+                    self.finished = True
+                    continue
 
-                # check if link crossed crawling limit
-                if self.limit == "depth":
-                    if self._exceeded_depth(link):
-                        break
-                if self.limit == "count":
-                    if self._reached_count():
-                        break
-
-                links.append(link)
-
-            manager_thread = Thread(target=Spider._scan_thread_manager, args=(self, links))
-            manager_thread.start()
-            manager_thread.join()
-
-            # we want each thread to update the links list
-            while any(t.is_alive() for t in self._thread_list):
-                pass
+            self._scan(link)
 
     def crawl(self):
         """
         Wrapper for _crawl method.
         """
+        self.finished = False
+        # write initial log
+        with open(self._log_file_path, "a") as log_file:
+            log_file.write("[+][{}] Crawling started at domain: {}\n".format(time.strftime("%H:%M:%S %d/%m/%Y"), self._domain))
+
         self._crawl()
+
+        # write final log
+        with open(self._log_file_path, "a") as log_file:
+            log_file.write("[*] Pages Scanned: {}\n".format(self.count))
+            log_file.write("[+][{}] Crawling ended.\n".format(time.strftime("%H:%M:%S %d/%m/%Y")))
+
+        self.finished = True
 
         # the acquiring is done in the WebCrawler class before spawning the new process
         self._sema.release()

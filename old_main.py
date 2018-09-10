@@ -13,11 +13,17 @@ def main():
     parser.add_argument("-v", "--verbose", action="store_true", help="set verbosity of program")
     parser.add_argument("-p", "--max-processes", type=int, help="maximum number of processes to run in parallel (default is 10)")
     parser.add_argument("-t", "--max-threads", type=int, help="maximum number of threads per process (default is 20)")
+    parser.add_argument("-o", "--log-output-dir", help="directory to store results and logs in (default is current working directory)")
     args = parser.parse_args()
 
     # check if url_list file exists and that user has permission to read it
     if not os.path.isfile(args.url_list) or not os.access(args.url_list, os.R_OK):
         print("[-] File does not exist: {}".format(args.url_list))
+        sys.exit(1)
+
+    # check if log_output_dir is set, exists and that user has permission to write to it
+    if args.log_output_dir and (not os.path.isdir(args.log_output_dir) or not os.access(args.log_output_dir, os.W_OK)):
+        print("[-] Directory does not exist: {}".format(args.log_output_dir))
         sys.exit(1)
 
     # get url list
@@ -29,6 +35,8 @@ def main():
     crawler = WebCrawler(urls)
 
     # set custom parameters
+    if args.log_output_dir:
+        crawler.log_dir = args.log_output_dir
     if args.max_processes:
         crawler.max_processes = args.max_processes
     if args.max_threads:
