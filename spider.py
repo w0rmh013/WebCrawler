@@ -21,10 +21,11 @@ class Spider:
         :param max_threads: maximum number of threads per process
         :param sema: semaphore (used for release action)
         """
+        # note: the locks are necessary for the parallel work and updating of variables
         self._emails_file_path = result_file_name
 
         self._max_threads = max_threads
-        self._thread_list = list()
+        self._thread_list = list()  # we want to keep track of alive threads
 
         self._sema = sema  # a semaphore
 
@@ -46,9 +47,6 @@ class Spider:
         self._scraper = Scraper(self._domain, url)  # spider's links scraper
         self._emails = list()  # list of emails already found (no need to use hash list since emails are usually short)
         self._email_lock = Lock()  # lock to emails file
-
-        # we want to let the main thread know that another thread is updating the queue
-        self._queue_updating_lock = Lock()
 
     def _get_emails(self, content):
         """
@@ -108,6 +106,8 @@ class Spider:
 
                 # request page
                 r = requests.get(link)
+
+                # update emails
                 self._get_emails(r.text)
 
                 # add new links to queue

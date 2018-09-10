@@ -1,6 +1,7 @@
 from argparse import ArgumentParser
 import os
 import sys
+from time import time
 from web_crawler import WebCrawler
 
 
@@ -42,7 +43,9 @@ def main():
         crawler.limit = "count"
         crawler.limit_param = args.count
 
+    t = time()
     crawler.start()
+    print("Time passed: {}".format(time()-t))
     sys.exit(0)
 
 
