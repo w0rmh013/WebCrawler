@@ -4,17 +4,20 @@ from multiprocessing import Queue
 import re
 import requests
 import time
+from urllib.parse import urlsplit
 
 from scraper import Scraper
 
 
 class Spider:
-    def __init__(self, url, domain, log_dir, sema):
+    def __init__(self, url, domain, limit, limit_param, log_dir, sema):
         """
         Create instance of Spider.
 
         :param url: website url
         :param domain: domain of website
+        :param limit: crawling limit type ("depth" or "count")
+        :param limit_param: limit parameter (max depth or max number of pages)
         :param log_dir: directory path to store log and result
         :param sema: semaphore (used for release action)
         """
@@ -22,6 +25,13 @@ class Spider:
 
         self._url = url
         self._domain = domain
+
+        # set limit properties
+        self.limit = limit
+        self.limit_param = limit_param
+
+        # pages scanned count
+        self.count = 0
 
         # create links-to-visit queue
         self._to_visit = Queue()
@@ -41,20 +51,6 @@ class Spider:
 
         self._finished = False  # check if crawler finished
 
-    # @staticmethod
-    # def get_domain(u):
-    #     """
-    #     Get domain from url (the method is static since we'll use it in WebCrawler to check for duplicate domains).
-    #
-    #     :param u: url
-    #     :return: domain associated with the url
-    #     """
-    #     domain = urlsplit(u).netloc
-    #     if domain == "":
-    #         print("[-] Could not get a valid domain from {}".format(u))
-    #         raise ValueError
-    #     return domain
-
     def _get_emails(self):
         """
         Find all email addresses in the current data with regex pattern.
@@ -68,6 +64,24 @@ class Spider:
                 if email not in self._emails:
                     self._emails.append(email)
                     emails_file.write(email+"\n")
+
+    def _check_depth(self, u):
+        """
+        Check if depth of path exceeded limit.
+
+        :param u: url
+        :return: True if depth exceeded limit, else False
+        """
+        path = urlsplit(u).path
+        return path.count("/") > self.limit_param
+
+    def _check_count(self):
+        """
+        Check if pages scanned count reached limit.
+
+        :return: True if count reached, else False
+        """
+        return self.count >= self.limit_param
 
     def _scan(self, link):
         """
@@ -83,7 +97,7 @@ class Spider:
         except requests.ConnectionError:
             # log connection failure
             with open(self._log_file_path, "a") as log_file:
-                log_file.writelines("[-] Failure to request: {} | Connection Error.\n".format(link))
+                log_file.write("\t[-] Failure to request: {} | Connection Error.\n".format(link))
             self._finished = True
             return list()
 
@@ -93,14 +107,17 @@ class Spider:
 
         # log the scanning
         with open(self._log_file_path, "a") as log_file:
-            log_file.writelines("[*] Scanning {}\n".format(link))
+            log_file.write("\t[*] Scanning {}\n".format(link))
+
+        # increase page scanned count
+        self.count += 1
 
         try:
             r = requests.get(link)
         except requests.ConnectionError:
             # log connection failure
             with open(self._log_file_path, "a") as log_file:
-                log_file.writelines("[-] Failure to request: {} | Connection Error.\n".format(link))
+                log_file.write("\t[-] Failure to request: {} | Connection Error.\n".format(link))
             self._finished = True
             return list()
 
@@ -115,6 +132,16 @@ class Spider:
         # start scanning website
         while not self._finished and not self._to_visit.empty():
             link = self._to_visit.get()
+
+            # check if link crossed crawling limit
+            if self.limit == "depth":
+                if self._check_depth(link):
+                    self._finished = True
+                    continue
+            if self.limit == "count":
+                if self._check_count():
+                    self._finished = True
+                    continue
 
             # the new links are unvisited links
             for new_link in self._scan(link):
@@ -135,6 +162,7 @@ class Spider:
         # write final log
         with open(self._log_file_path, "a") as log_file:
             log_file.write("[+][{}] Crawling ended.\n".format(time.strftime("%H:%M:%S %d/%m/%Y")))
+            log_file.write("[*] Pages Scanned: {}\n".format(self.count))
 
         # the acquiring is done in the WebCrawler class before spawning the new process
         self._sema.release()

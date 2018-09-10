@@ -32,12 +32,12 @@ class Scraper:
         parts = urlsplit(raw_link)
         # a link of the form "/test/index.html"
         if parts.scheme == "" and parts.netloc == "":
-            return "http://{1}/{0.path}{0.query}{0.fragment}".format(parts, self._domain)
+            return "http://{1}/{0.path}{0.query}{0.fragment}".format(parts, self._domain).replace("\\", "/")
 
         if parts.scheme != "http" or parts.netloc != self._domain:
             return
 
-        return raw_link
+        return raw_link.replace("\\", "/")
 
     def _link_visited(self, link):
         """

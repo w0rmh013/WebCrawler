@@ -6,6 +6,9 @@ from web_crawler import WebCrawler
 
 def main():
     parser = ArgumentParser()
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("-d", "--depth", type=int, help="limit crawling by depth of directory tree (default, 10)")
+    group.add_argument("-c", "--count", type=int, help="limit crawling by number of pages")
     parser.add_argument("url_list", help="file containing urls separated by newlines")
     parser.add_argument("-v", "--verbose", action="store_true", help="set verbosity of program")
     parser.add_argument("-m", "--max-processes", type=int, help="maximum number of processes to run in parallel (default is 10)")
@@ -37,6 +40,12 @@ def main():
         crawler.max_processes = args.max_processes
     if args.verbose:
         crawler.verbose = True
+    if args.depth:
+        crawler.limit = "depth"
+        crawler.limit_param = args.depth
+    elif args.count:
+        crawler.limit = "count"
+        crawler.limit_param = args.count
 
     crawler.start()
     sys.exit(0)
