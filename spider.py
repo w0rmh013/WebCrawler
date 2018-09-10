@@ -4,24 +4,24 @@ from multiprocessing import Queue
 import re
 import requests
 import time
-from urllib.parse import urlsplit
 
 from scraper import Scraper
 
 
 class Spider:
-    def __init__(self, url, log_dir, sema):
+    def __init__(self, url, domain, log_dir, sema):
         """
         Create instance of Spider.
 
         :param url: website url
+        :param domain: domain of website
         :param log_dir: directory path to store log and result
         :param sema: semaphore (used for release action)
         """
         self._sema = sema  # a semaphore
 
         self._url = url
-        self._domain = self.get_domain(self._url)
+        self._domain = domain
 
         # create links-to-visit queue
         self._to_visit = Queue()
@@ -41,19 +41,19 @@ class Spider:
 
         self._finished = False  # check if crawler finished
 
-    @staticmethod
-    def get_domain(u):
-        """
-        Get domain from url (the method is static since we'll use it in WebCrawler to check for duplicate domains).
-
-        :param u: url
-        :return: domain associated with the url
-        """
-        domain = urlsplit(u).netloc
-        if domain == "":
-            print("[-] Could not get a valid domain from {}".format(u))
-            raise ValueError
-        return domain
+    # @staticmethod
+    # def get_domain(u):
+    #     """
+    #     Get domain from url (the method is static since we'll use it in WebCrawler to check for duplicate domains).
+    #
+    #     :param u: url
+    #     :return: domain associated with the url
+    #     """
+    #     domain = urlsplit(u).netloc
+    #     if domain == "":
+    #         print("[-] Could not get a valid domain from {}".format(u))
+    #         raise ValueError
+    #     return domain
 
     def _get_emails(self):
         """

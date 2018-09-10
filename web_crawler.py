@@ -3,6 +3,7 @@ from multiprocessing import Process, Semaphore
 import os
 import string
 import time
+from urllib.parse import urlsplit
 
 from spider import Spider
 
@@ -22,17 +23,15 @@ class WebCrawler:
             clean = list()
 
             for u in u_list:
-                d = Spider.get_domain(u).lower()
+                d = urlsplit(u).netloc.lower()
+                if d == "":
+                    continue
                 if d not in domains:
                     domains.append(d)
                     clean.append(u)
             return clean
 
         self._urls = clean_duplicates(urls)  # url list without duplicates
-
-        if not os.path.isdir(log_dir):
-            print("[-] Log directory does not exist: {}".format(log_dir))
-            raise FileNotFoundError
         self._log_dir = log_dir
 
         self._max_processes = max_processes
@@ -43,8 +42,7 @@ class WebCrawler:
         Start crawling in domains.
         """
         # create a unique log directory name
-        def create_log_dir_name(uu):
-            d = Spider.get_domain(uu).lower()
+        def create_log_dir_name(uu, dd):
             clean_domain = ""
             for char in d:
                 if char not in string.ascii_letters+string.digits:
@@ -56,6 +54,7 @@ class WebCrawler:
         # the spiders can crawl independently and have no common resources
         for u in self._urls:
             self._sema.acquire(True)  # acquire semaphore for next spider
-            s = Spider(u, os.path.join(self._log_dir, create_log_dir_name(u)), self._sema)
+            d = urlsplit(u).netloc.lower()
+            s = Spider(u, d, os.path.join(self._log_dir, create_log_dir_name(u, d)), self._sema)
             p = Process(target=Spider.crawl, args=(s, ))
             p.start()
