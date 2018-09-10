@@ -4,6 +4,7 @@ from multiprocessing import Queue
 import re
 import requests
 import time
+from urllib.parse import urlsplit
 
 from scraper import Scraper
 
@@ -48,13 +49,11 @@ class Spider:
         :param u: url
         :return: domain associated with the url
         """
-        m = re.match(r"^(http)?s?(://)?([^\\/]*)[\\/]?", u)
-        if m:
-            return m.group(3)
-
-        # if we didn't get a valid domain (empty domain)
-        print("[-] Could not get a valid domain from {}".format(u))
-        raise ValueError
+        domain = urlsplit(u).netloc
+        if domain == "":
+            print("[-] Could not get a valid domain from {}".format(u))
+            raise ValueError
+        return domain
 
     def _get_emails(self):
         """

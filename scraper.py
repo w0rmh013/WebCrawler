@@ -1,8 +1,7 @@
 # this module is used to scrape links from a web page
 from bs4 import BeautifulSoup
 from hashlib import sha256
-from pathlib import PurePath
-import re
+from urllib.parse import urlsplit
 
 
 class Scraper:
@@ -30,22 +29,15 @@ class Scraper:
         if not raw_link:
             return
 
-        m = re.match(r"^https?://"+re.escape(self._domain)+".*", raw_link)  # internal link of the form "http://domain/a/b/"
-        if m:
-            return m.group(0)
+        parts = urlsplit(raw_link)
+        # a link of the form "/test/index.html"
+        if parts.scheme == "" and parts.netloc == "":
+            return "http://{1}/{0.path}{0.query}{0.fragment}".format(parts, self._domain)
 
-        # link is external (e.g. http://notthesamedomain/b/c)
-        m = re.match(r"^https?://", raw_link)
-        if m:
+        if parts.scheme != "http" or parts.netloc != self._domain:
             return
 
-        m = re.match(r"^[\\/]?(.*)", raw_link)  # internal link of the form "/dir/dir2/index.html" or "test.html"
-        if m:
-            domain_path = PurePath(self._domain)
-            link_path = m.group(1)
-
-            # concatenate the domain path with the internal link
-            return "http://"+str(domain_path / link_path).replace("\\", "/")
+        return raw_link
 
     def _link_visited(self, link):
         """
