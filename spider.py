@@ -9,33 +9,35 @@ from scraper import Scraper
 
 
 class Spider:
-    def __init__(self, url, log_dir):
+    def __init__(self, url, log_dir, sema):
         """
         Create instance of Spider.
 
         :param url: website url
         :param log_dir: directory path to store log and result
+        :param sema: semaphore (used for release action)
         """
+        self._sema = sema  # a semaphore
+
         self._url = url
-
-        # create log dir
-        self._log_dir = log_dir
-        os.mkdir(self._log_dir)
-
-        self._log_file_path = os.path.join(self._log_dir, "scan_log.txt")
-        self._emails_file_path = os.path.join(self._log_dir, "emails.txt")
-
         self._domain = self.get_domain(self._url)
 
         # create links-to-visit queue
         self._to_visit = Queue()
         self._to_visit.put(self._url)
 
-        self._scraper = Scraper(self._domain, url) # spider's links scraper
-        self._emails = list()  # list of emails already found (no need to use hash since emails are usually short)
+        self._scraper = Scraper(self._domain, url)  # spider's links scraper
+        self._emails = list()  # list of emails already found (no need to use hash list since emails are usually short)
 
         # current page content
         self._current_content = ""  # we save current content to reduce memory usage when passing the content to functions
+
+        # create log dir
+        self._log_dir = log_dir
+        os.mkdir(self._log_dir)
+        self._log_file_path = os.path.join(self._log_dir, "scan_log.txt")
+        self._emails_file_path = os.path.join(self._log_dir, "emails.txt")
+
         self._finished = False  # check if crawler finished
 
     @staticmethod
@@ -58,8 +60,8 @@ class Spider:
         """
         Find all email addresses in the current data with regex pattern.
         """
-        # log emails that match the regex pattern
-        emails = re.findall(r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+", self._current_content)
+        # emails that match the regex pattern
+        emails = set(re.findall(r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+", self._current_content))
 
         with open(self._emails_file_path, "a") as emails_file:
             for email in emails:
@@ -134,3 +136,6 @@ class Spider:
         # write final log
         with open(self._log_file_path, "a") as log_file:
             log_file.write("[+][{}] Crawling ended.\n".format(time.strftime("%H:%M:%S %d/%m/%Y")))
+
+        # the acquiring is done in the WebCrawler class before spawning the new process
+        self._sema.release()
