@@ -3,6 +3,7 @@ import os
 from multiprocessing import Queue
 import re
 import requests
+from threading import Thread
 import time
 from urllib.parse import urlsplit
 
@@ -10,7 +11,7 @@ from scraper import Scraper
 
 
 class Spider:
-    def __init__(self, url, domain, limit, limit_param, log_dir, sema):
+    def __init__(self, url, domain, limit, limit_param, log_dir, max_threads, sema):
         """
         Create instance of Spider.
 
@@ -19,8 +20,10 @@ class Spider:
         :param limit: crawling limit type ("depth" or "count")
         :param limit_param: limit parameter (max depth or max number of pages)
         :param log_dir: directory path to store log and result
+        :param max_threads: maximum number of threads per process
         :param sema: semaphore (used for release action)
         """
+        self._max_threads = max_threads
         self._sema = sema  # a semaphore
 
         self._url = Scraper.create_http_link(urlsplit(url))  # starting url should also be encoded
@@ -85,10 +88,9 @@ class Spider:
 
     def _scan(self, link):
         """
-        Scan a page to get emails and new links.
+        Scan a page to get emails and update links queue.
 
         :param link: link to web page
-        :return: list of new links to scan
         """
 
         # send HTTP HEAD request to check that content-type is text
@@ -100,11 +102,11 @@ class Spider:
             with open(self._log_file_path, "a") as log_file:
                 log_file.write("\t[-] Failure to request: {} | Connection Error.\n".format(link))
             self.finished = True
-            return list()
+            return
 
         m = re.match(r"^text/", check_head.headers.get("Content-Type", ""))
         if not m:
-            return list()
+            return
 
         # increase page scanned count
         self.count += 1
@@ -120,11 +122,14 @@ class Spider:
             with open(self._log_file_path, "a") as log_file:
                 log_file.write("\t[-] Failure to request: {} | Connection Error.\n".format(link))
             self.finished = True
-            return list()
+            return
 
         self._current_content = r.text
         self._get_emails()
-        return self._scraper.get_hyperlinks(self._current_content)
+
+        # add new links to queue
+        for new_link in self._scraper.get_hyperlinks(self._current_content):
+            self._to_visit.put(new_link)
 
     def _crawl(self):
         """
@@ -144,9 +149,7 @@ class Spider:
                     self.finished = True
                     continue
 
-            # the new links are unvisited links
-            for new_link in self._scan(link):
-                self._to_visit.put(new_link)
+            self._scan(link)
 
     def crawl(self):
         """

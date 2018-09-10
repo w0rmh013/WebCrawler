@@ -9,7 +9,7 @@ from spider import Spider
 
 
 class WebCrawler:
-    def __init__(self, urls, limit="depth", limit_param=10, log_dir=os.getcwd(), max_processes=10, verbose=False):
+    def __init__(self, urls, limit="depth", limit_param=10, log_dir=os.getcwd(), max_processes=10, max_threads=20, verbose=False):
         """
         Create instance of WebCrawler.
 
@@ -18,6 +18,8 @@ class WebCrawler:
         :param limit_param: limit parameter (max depth or max number of pages)
         :param log_dir: directory path to store logs and results
         :param max_processes: maximum number of processes to run in parallel
+        :param max_threads: maximum number of threads per process
+        :param verbose: verbosity of WebCrawler
         """
         # clean duplicate urls from list and return cleaned list
         def clean_duplicates(u_list):
@@ -42,6 +44,7 @@ class WebCrawler:
         self.log_dir = log_dir
 
         self.max_processes = max_processes
+        self.max_threads = max_threads
         self._sema = None  # semaphore used to limit number of processes running in parallel
 
         self.verbose = verbose
@@ -60,7 +63,7 @@ class WebCrawler:
         # the spiders can crawl independently and have no common resources
         for u in self._urls:
             d = urlsplit(u).netloc.lower()
-            s = Spider(u, d, self.limit, self.limit_param, os.path.join(self.log_dir, create_log_dir_name(d)), self._sema)
+            s = Spider(u, d, self.limit, self.limit_param, os.path.join(self.log_dir, create_log_dir_name(d)), self.max_threads, self._sema)
 
             p = Process(target=Spider.crawl, args=(s, ))
             self._sema.acquire(True)  # acquire semaphore for next spider

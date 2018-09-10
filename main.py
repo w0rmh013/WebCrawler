@@ -11,7 +11,8 @@ def main():
     group.add_argument("-c", "--count", type=int, help="limit crawling by number of pages")
     parser.add_argument("url_list", help="file containing urls separated by newlines")
     parser.add_argument("-v", "--verbose", action="store_true", help="set verbosity of program")
-    parser.add_argument("-m", "--max-processes", type=int, help="maximum number of processes to run in parallel (default is 10)")
+    parser.add_argument("-p", "--max-processes", type=int, help="maximum number of processes to run in parallel (default is 10)")
+    parser.add_argument("-t", "--max-threads", type=int, help="maximum number of threads per process (default is 20)")
     parser.add_argument("-o", "--log-output-dir", help="directory to store results and logs in (default is current working directory)")
     args = parser.parse_args()
 
@@ -38,6 +39,8 @@ def main():
         crawler.log_dir = args.log_output_dir
     if args.max_processes:
         crawler.max_processes = args.max_processes
+    if args.max_threads:
+        crawler.max_threads = args.max_threads
     if args.verbose:
         crawler.verbose = True
     if args.depth:
@@ -48,6 +51,7 @@ def main():
         crawler.limit_param = args.count
 
     crawler.start()
+    print("DEBUG :: Crawler start ended")
     sys.exit(0)
 
 
