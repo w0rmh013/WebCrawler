@@ -52,12 +52,6 @@ class WebCrawler:
         """
         # create a unique log directory name
         def create_log_dir_name(dd):
-            # clean_domain = ""
-            # for char in dd:
-            #     if char not in string.ascii_letters+string.digits:
-            #         clean_domain += "_"
-            #     else:
-            #         clean_domain += char
             clean_domain = "".join(c if c in string.ascii_letters+string.digits else "_" for c in dd)
             return clean_domain + time.strftime("__%Y%m%d_%H%M%S")
 

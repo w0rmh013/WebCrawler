@@ -65,7 +65,7 @@ class Spider:
                     self._emails.append(email)
                     emails_file.write(email+"\n")
 
-    def _check_depth(self, u):
+    def _exceeded_depth(self, u):
         """
         Check if depth of path exceeded limit.
 
@@ -75,7 +75,7 @@ class Spider:
         path = urlsplit(u).path
         return path.count("/") > self.limit_param
 
-    def _check_count(self):
+    def _reached_count(self):
         """
         Check if pages scanned count reached limit.
 
@@ -135,11 +135,11 @@ class Spider:
 
             # check if link crossed crawling limit
             if self.limit == "depth":
-                if self._check_depth(link):
+                if self._exceeded_depth(link):
                     self._finished = True
                     continue
             if self.limit == "count":
-                if self._check_count():
+                if self._reached_count():
                     self._finished = True
                     continue
 
