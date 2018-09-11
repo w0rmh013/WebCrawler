@@ -71,16 +71,8 @@ class WebCrawler:
             if self.verbose:
                 print("[+] Spawned spider for: {}".format(u))
 
-    def _spawn_process_manager(self):
-        """
-        Create and manage processes for _spawn method.
-        """
-        manager_process = Process(target=WebCrawler._spawn, args=(self, ))
-        manager_process.start()
-        manager_process.join()
-
     def start(self):
         """
         Start crawling in domains.
         """
-        self._spawn_process_manager()
+        self._spawn()

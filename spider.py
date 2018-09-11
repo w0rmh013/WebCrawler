@@ -2,6 +2,7 @@
 from multiprocessing import Lock, Queue
 import re
 import requests
+from time import time
 from threading import Thread
 from urllib.parse import urlsplit
 
@@ -88,6 +89,19 @@ class Spider:
         """
         return self._count >= self.limit_param
 
+    def _limit_reached(self, u):
+        """
+        Check if link met limit condition.
+
+        :param u: url
+        :return: True if limit condition met, else False
+        """
+        if self.limit == "depth":
+            return self._exceeded_depth(u)
+        if self.limit == "count":
+            return self._reached_count()
+
+
     def _scan(self, link):
         """
         Scan a page to get emails and update links queue.
@@ -124,42 +138,55 @@ class Spider:
         """
         Start crawling in the domain.
         """
-        # start scanning website
+        thread_list = list()
+
         while not self._to_visit.empty():
-            thread_list = list()  # keep track of alive threads
-            links = list()
 
-            # populate links list for multi-threading
-            while not self._to_visit.empty() and len(links) < self._max_threads:
+            # first spawning of threads
+            while not self._to_visit.empty() and len(thread_list) < self._max_threads:
                 link = self._to_visit.get()
+                if self._limit_reached(link):
+                    break
 
-                # check if link crossed crawling limit
-                if self.limit == "depth":
-                    if self._exceeded_depth(link):
-                        break
-                if self.limit == "count":
-                    if self._reached_count():
-                        break
-
-                links.append(link)
-
-            # create new threads
-            for link in links:
                 t = Thread(target=Spider._scan, args=(self, link))
                 thread_list.append(t)
                 t.start()
 
-            # we want each thread to update the links list
-            while any(t.is_alive() for t in thread_list):
-                pass
+            # if while loop didn't break
+            else:
+                # main thread spawning
+                while any(t.is_alive() for t in thread_list):
+                    i = 0
+                    spawned = False
+                    while i < len(thread_list) and not spawned:
+
+                        # if a thread is not alive, we want to spawn a new one to replace him
+                        if not thread_list[i].is_alive():
+                            thread_list.pop(i)
+
+                            # get new link if link queue is not empty
+                            if not self._to_visit.empty():
+                                link = self._to_visit.get()
+
+                                if self._limit_reached(link):
+                                    break
+
+                                t = Thread(target=Spider._scan, args=(self, link))
+                                thread_list.append(t)
+                                t.start()
+                                spawned = True
+
+                        i += 1
 
     def crawl(self):
         """
         Wrapper for _crawl method.
         """
+        t = time()
         self._crawl()
         if self.verbose:
             print("[*] Log: {} | Pages Scanned: {}".format(self._domain, self._count))
+            print("[*] Log: {} | Time: {} Seconds".format(self._domain, time()-t))
 
         # the acquiring is done in the WebCrawler class before spawning the new process
         self._sema.release()
