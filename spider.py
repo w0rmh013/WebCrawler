@@ -26,7 +26,6 @@ class Spider:
         self._emails_file_path = result_file_name
 
         self._max_threads = max_threads
-        self._thread_list = list()  # we want to keep track of alive threads
 
         self._sema = sema  # a semaphore
 
@@ -121,24 +120,13 @@ class Spider:
             # connection failure
             pass
 
-    def _scan_thread_manager(self, links):
-        """
-        Create and manage threads for _scan method.
-
-        :param links: links to web pages
-        """
-        for link in links:
-            t = Thread(target=Spider._scan, args=(self, link))
-            self._thread_list.append(t)
-            t.start()
-
     def _crawl(self):
         """
         Start crawling in the domain.
         """
         # start scanning website
         while not self._to_visit.empty():
-            self._thread_list = list()
+            thread_list = list()  # keep track of alive threads
             links = list()
 
             # populate links list for multi-threading
@@ -155,12 +143,14 @@ class Spider:
 
                 links.append(link)
 
-            manager_thread = Thread(target=Spider._scan_thread_manager, args=(self, links))
-            manager_thread.start()
-            manager_thread.join()
+            # create new threads
+            for link in links:
+                t = Thread(target=Spider._scan, args=(self, link))
+                thread_list.append(t)
+                t.start()
 
             # we want each thread to update the links list
-            while any(t.is_alive() for t in self._thread_list):
+            while any(t.is_alive() for t in thread_list):
                 pass
 
     def crawl(self):
