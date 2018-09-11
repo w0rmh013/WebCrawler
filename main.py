@@ -1,3 +1,4 @@
+# python3 main.py -v -t 30 -c 100 urls.txt
 from argparse import ArgumentParser
 import os
 import sys
