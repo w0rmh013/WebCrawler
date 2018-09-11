@@ -9,7 +9,7 @@ from scraper import Scraper
 
 
 class Spider:
-    def __init__(self, url, domain, limit, limit_param, result_file_name, max_threads, sema):
+    def __init__(self, url, domain, limit, limit_param, result_file_name, max_threads, sema, verbose):
         """
         Create instance of Spider.
 
@@ -20,6 +20,7 @@ class Spider:
         :param result_file_name: file to store results in
         :param max_threads: maximum number of threads per process
         :param sema: semaphore (used for release action)
+        :param verbose: verbosity of Spider
         """
         # note: the locks are necessary for the parallel work and updating of variables
         self._emails_file_path = result_file_name
@@ -37,7 +38,7 @@ class Spider:
         self.limit_param = limit_param
 
         # pages scanned count
-        self.count = 0
+        self._count = 0
         self._count_lock = Lock()  # lock count variable
 
         # create links-to-visit queue
@@ -47,6 +48,8 @@ class Spider:
         self._scraper = Scraper(self._domain, url)  # spider's links scraper
         self._emails = list()  # list of emails already found (no need to use hash list since emails are usually short)
         self._email_lock = Lock()  # lock to emails file
+
+        self.verbose = verbose
 
     def _get_emails(self, content):
         """
@@ -84,7 +87,7 @@ class Spider:
 
         :return: True if count reached, else False
         """
-        return self.count >= self.limit_param
+        return self._count >= self.limit_param
 
     def _scan(self, link):
         """
@@ -101,7 +104,7 @@ class Spider:
             if m:
                 # increase page scanned count
                 self._count_lock.acquire(True)
-                self.count += 1
+                self._count += 1
                 self._count_lock.release()
 
                 # request page
@@ -165,6 +168,8 @@ class Spider:
         Wrapper for _crawl method.
         """
         self._crawl()
+        if self.verbose:
+            print("[*] Log: {} | Pages Scanned: {}".format(self._domain, self._count))
 
         # the acquiring is done in the WebCrawler class before spawning the new process
         self._sema.release()

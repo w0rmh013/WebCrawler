@@ -61,7 +61,8 @@ class WebCrawler:
         # the spiders can crawl independently and have no common resources
         for u in self._urls:
             d = urlsplit(u).netloc.lower()
-            s = Spider(u, d, self.limit, self.limit_param, os.path.join(os.getcwd(), create_result_file_name(d)), self.max_threads, self._sema)
+            s = Spider(u, d, self.limit, self.limit_param, os.path.join(os.getcwd(), create_result_file_name(d)),
+                       self.max_threads, self._sema, self.verbose)
 
             p = Process(target=Spider.crawl, args=(s, ))
             self._sema.acquire(True)  # acquire semaphore for next spider
